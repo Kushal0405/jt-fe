@@ -1,0 +1,117 @@
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 224 20% 6%;
+  --foreground: 210 20% 96%;
+
+  --card: 224 18% 9%;
+  --card-foreground: 210 20% 96%;
+
+  --border: 224 15% 14%;
+  --input: 224 15% 12%;
+
+  --primary: 258 90% 66%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 224 15% 13%;
+  --secondary-foreground: 210 20% 80%;
+
+  --muted: 224 15% 11%;
+  --muted-foreground: 215 15% 50%;
+
+  --accent: 258 90% 66%;
+  --accent-foreground: 0 0% 100%;
+
+  --success: 152 69% 45%;
+  --warning: 38 92% 55%;
+  --danger: 0 84% 60%;
+
+  --radius: 10px;
+
+  --font-clash: 'Clash Display', sans-serif;
+}
+
+* {
+  border-color: hsl(var(--border));
+  box-sizing: border-box;
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-feature-settings: 'rlig' 1, 'calt' 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+
+/* Selection */
+::selection { background: hsl(258 90% 66% / 0.3); }
+
+@layer components {
+  .card {
+    @apply bg-card border border-border rounded-lg;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium
+           hover:opacity-90 active:scale-95 transition-all duration-150 inline-flex items-center gap-2;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground px-4 py-2 rounded-md text-sm font-medium
+           hover:bg-secondary/80 active:scale-95 transition-all duration-150 border border-border
+           inline-flex items-center gap-2;
+  }
+
+  .btn-ghost {
+    @apply text-muted-foreground px-3 py-2 rounded-md text-sm font-medium
+           hover:bg-secondary hover:text-foreground active:scale-95 transition-all duration-150
+           inline-flex items-center gap-2;
+  }
+
+  .input {
+    @apply bg-input border border-border rounded-md px-3 py-2 text-sm text-foreground
+           placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50
+           focus:border-primary/50 transition-all duration-150 w-full;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-saved    { @apply bg-secondary text-secondary-foreground; }
+  .badge-applied  { @apply bg-blue-500/15 text-blue-400; }
+  .badge-screening { @apply bg-amber-500/15 text-amber-400; }
+  .badge-interview { @apply bg-violet-500/15 text-violet-400; }
+  .badge-offer    { @apply bg-emerald-500/15 text-emerald-400; }
+  .badge-rejected { @apply bg-red-500/15 text-red-400; }
+  .badge-withdrawn { @apply bg-secondary text-muted-foreground; }
+
+  .glow {
+    box-shadow: 0 0 40px hsl(258 90% 66% / 0.12);
+  }
+
+  .gradient-border {
+    position: relative;
+  }
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, hsl(258 90% 66% / 0.4), transparent 60%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
