@@ -53,7 +53,7 @@ export default function RegisterPage() {
         <div className="card gradient-border p-6 glow">
           <form onSubmit={handleSubmit} className="space-y-4">
             {[
-              { key: 'name', label: 'Full name', icon: User, type: 'text', placeholder: 'Kushal Reddy' },
+              { key: 'name', label: 'Full name', icon: User, type: 'text', placeholder: 'Your Name' },
               { key: 'email', label: 'Email', icon: Mail, type: 'email', placeholder: 'you@example.com' },
               { key: 'password', label: 'Password', icon: Lock, type: 'password', placeholder: '6+ characters' },
             ].map(({ key, label, icon: Icon, type, placeholder }) => (
