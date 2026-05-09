@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Search, MapPin, ExternalLink, BookmarkPlus, Check, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
+import { Search, MapPin, ExternalLink, BookmarkPlus, Check, ChevronDown, ChevronUp, RefreshCw, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import AppLayout from '@/app/components/layout/AppLayout';
 import { PageHeader, EmptyState, Spinner, SkillTag } from '@/app/components/ui';
@@ -43,6 +44,7 @@ export default function DiscoverPage() {
     gcTime: 30 * 60_000,
   });
   const userCV = cvData ?? '';
+  const hasCV = !!userCV.trim();
 
   const jobs = data?.jobs ?? [];
   const total = data?.total ?? 0;
@@ -64,6 +66,17 @@ export default function DiscoverPage() {
           </button>
         }
       />
+
+      {/* No-CV warning */}
+      {!hasCV && (
+        <div className="flex items-center gap-3 mb-5 px-4 py-3 rounded-lg bg-warning/10 border border-warning/30 text-sm text-warning">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>ATS scores are hidden — no default resume found.</span>
+          <Link href="/resume" className="ml-auto text-xs font-medium underline underline-offset-2 hover:opacity-80 whitespace-nowrap">
+            Upload resume →
+          </Link>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
@@ -116,6 +129,7 @@ export default function DiscoverPage() {
               key={job._id}
               job={job}
               userCV={userCV}
+              hasCV={hasCV}
               minATSScore={minATSScore}
               isAdded={addedIds.has(job._id)}
               onAdded={() => setAddedIds(prev => { const n = new Set(prev); n.add(job._id); return n; })}
@@ -172,10 +186,11 @@ function ATSScoreRing({ score, loading }: { score: number | null; loading: boole
 }
 
 function DiscoveredJobCard({
-  job, userCV, minATSScore, isAdded, onAdded,
+  job, userCV, hasCV, minATSScore, isAdded, onAdded,
 }: {
   job: DiscoveredJob;
   userCV: string;
+  hasCV: boolean;
   minATSScore: number;
   isAdded: boolean;
   onAdded: () => void;
@@ -211,7 +226,10 @@ function DiscoveredJobCard({
         <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0">
           {(job.company || 'J')[0].toUpperCase()}
         </div>
-        <ATSScoreRing score={score} loading={atsLoading} />
+        {hasCV
+          ? <ATSScoreRing score={score} loading={atsLoading} />
+          : <div className="w-12 h-12 rounded-full bg-secondary/40 border border-border shrink-0 flex items-center justify-center" title="Upload a resume to see ATS score"><span className="text-[9px] text-muted-foreground">N/A</span></div>
+        }
       </div>
 
       {/* Title + company */}
