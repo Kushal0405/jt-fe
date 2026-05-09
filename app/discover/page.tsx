@@ -184,9 +184,6 @@ function DiscoveredJobCard({
   const { ref, score, matchedKeywords, missingKeywords, isLoading: atsLoading } =
     useATSScore(job.description, userCV);
 
-  // Hide card if below min ATS threshold (only once score is known)
-  if (minATSScore > 0 && score !== null && score < minATSScore) return null;
-
   const addMutation = useMutation({
     mutationFn: () => discoveredJobsApi.addToTracker(job._id),
     onSuccess: () => {
@@ -197,6 +194,9 @@ function DiscoveredJobCard({
       toast.error(err.response?.data?.message || 'Failed to add');
     },
   });
+
+  // Hide card if below min ATS threshold (only once score is known)
+  if (minATSScore > 0 && score !== null && score < minATSScore) return null;
 
   return (
     <div
