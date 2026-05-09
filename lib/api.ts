@@ -46,6 +46,7 @@ export const jobsApi = {
   create: (data: Record<string, unknown>) => api.post('/jobs', data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/jobs/${id}`, data),
   delete: (id: string) => api.delete(`/jobs/${id}`),
+  parseJd: (text: string) => api.post('/jobs/parse-jd', { text }),
 };
 
 export const applicationsApi = {
@@ -70,10 +71,16 @@ export const companiesApi = {
 
 export const resumeApi = {
   list: () => api.get('/resume'),
+  myText: () => api.get('/resume/my-text'),
   upload: (formData: FormData) =>
     api.post('/resume/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   match: (resumeId: string, jobId: string) =>
     api.post(`/resume/${resumeId}/match/${jobId}`),
   setDefault: (id: string) => api.patch(`/resume/${id}/set-default`),
   delete: (id: string) => api.delete(`/resume/${id}`),
+};
+
+export const atsApi = {
+  score: (jobDescription: string, cvText: string) =>
+    api.post('/ats-score', { jobDescription, cvText }),
 };

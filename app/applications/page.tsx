@@ -1,6 +1,13 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { FileText, ChevronDown, LayoutList, Columns } from 'lucide-react';
+import { useState } from 'react';
+import { FileText, ChevronDown, LayoutList, Columns, GripVertical } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  DndContext, DragEndEvent, DragOverlay, DragStartEvent,
+  useDroppable, useDraggable, closestCorners,
+  PointerSensor, useSensor, useSensors,
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import AppLayout from '@/app/components/layout/AppLayout';
 import { PageHeader, EmptyState, StageBadge, Spinner } from '@/app/components/ui';
 import { applicationsApi } from '@/lib/api';
@@ -11,42 +18,72 @@ import Link from 'next/link';
 
 type ViewMode = 'list' | 'kanban';
 
+const QUERY_KEY = ['applications'] as const;
+
+/** Fetch all applications (up to 500) — single source of truth for both views */
+async function fetchApplications() {
+  const { data } = await applicationsApi.list({ limit: 500 });
+  return {
+    applications: data.applications as Application[],
+    summary: (data.summary ?? {}) as Record<string, number>,
+  };
+}
+
 export default function ApplicationsPage() {
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [allApplications, setAllApplications] = useState<Application[]>([]);
-  const [summary, setSummary] = useState<Record<string, number>>({});
   const [activeStage, setActiveStage] = useState<Stage | 'all'>('all');
-  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<ViewMode>('list');
+  const qc = useQueryClient();
 
-  async function load() {
-    setLoading(true);
-    try {
-      // Always fetch all for kanban; filtered list for list view
-      const [allRes, filteredRes] = await Promise.all([
-        applicationsApi.list({ limit: 500 }),
-        activeStage !== 'all'
-          ? applicationsApi.list({ stage: activeStage, limit: 500 })
-          : Promise.resolve(null),
-      ]);
-      setAllApplications(allRes.data.applications);
-      setSummary(allRes.data.summary ?? {});
-      setApplications(filteredRes ? filteredRes.data.applications : allRes.data.applications);
-    } catch { toast.error('Failed to load'); }
-    finally { setLoading(false); }
-  }
+  const { data, isLoading } = useQuery({
+    queryKey: QUERY_KEY,
+    queryFn: fetchApplications,
+  });
 
-  useEffect(() => { load(); }, [activeStage]);
+  const allApplications = data?.applications ?? [];
+  const summary = data?.summary ?? {};
+  const totalApps = Object.values(summary).reduce((a, b) => a + b, 0);
 
-  async function updateStage(id: string, stage: Stage) {
-    try {
-      await applicationsApi.updateStage(id, stage);
+  // Filter client-side — no extra fetch needed
+  const applications =
+    activeStage === 'all'
+      ? allApplications
+      : allApplications.filter(a => a.stage === activeStage);
+
+  const stageMutation = useMutation({
+    mutationFn: ({ id, stage }: { id: string; stage: Stage }) =>
+      applicationsApi.updateStage(id, stage),
+    // Optimistic update — update cache immediately, no spinner
+    onMutate: async ({ id, stage }) => {
+      await qc.cancelQueries({ queryKey: QUERY_KEY });
+      const previous = qc.getQueryData(QUERY_KEY);
+      qc.setQueryData(QUERY_KEY, (old: typeof data) => {
+        if (!old) return old;
+        return {
+          ...old,
+          applications: old.applications.map(a =>
+            a._id === id ? { ...a, stage, updatedAt: new Date().toISOString() } : a
+          ),
+          summary: recalcSummary(old.applications, id, stage),
+        };
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(QUERY_KEY, ctx.previous);
+      toast.error('Failed to update stage');
+    },
+    onSuccess: (_res, { stage }) => {
       toast.success(`Moved to ${STAGE_META[stage].label}`);
-      load();
-    } catch { toast.error('Failed to update'); }
-  }
+    },
+    onSettled: () => {
+      // Re-validate in background to sync server truth
+      qc.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+  });
 
-  const totalApps = summary ? Object.values(summary).reduce((a, b) => a + b, 0) : 0;
+  function updateStage(id: string, stage: Stage) {
+    stageMutation.mutate({ id, stage });
+  }
 
   return (
     <AppLayout>
@@ -74,7 +111,6 @@ export default function ApplicationsPage() {
       />
 
       {view === 'list' && (
-        /* Stage filter tabs — only shown in list mode */
         <div className="flex items-center gap-1.5 mb-6 overflow-x-auto pb-1">
           <button
             onClick={() => setActiveStage('all')}
@@ -85,7 +121,7 @@ export default function ApplicationsPage() {
           >
             All <span className="bg-secondary px-1.5 py-0.5 rounded-full">{totalApps}</span>
           </button>
-          {STAGES?.map(stage => {
+          {STAGES.map(stage => {
             const meta = STAGE_META[stage];
             const count = summary?.[stage] ?? 0;
             return (
@@ -107,11 +143,11 @@ export default function ApplicationsPage() {
         </div>
       )}
 
-      {loading ? (
+      {isLoading ? (
         <div className="flex justify-center py-20"><Spinner /></div>
       ) : view === 'kanban' ? (
         <KanbanBoard applications={allApplications} summary={summary} onStageChange={updateStage} />
-      ) : applications?.length === 0 ? (
+      ) : applications.length === 0 ? (
         <EmptyState
           icon={FileText}
           title="No applications yet"
@@ -120,7 +156,7 @@ export default function ApplicationsPage() {
         />
       ) : (
         <div className="space-y-2">
-          {applications?.map(app => (
+          {applications.map(app => (
             <AppRow key={app._id} app={app} onStageChange={updateStage} />
           ))}
         </div>
@@ -129,16 +165,54 @@ export default function ApplicationsPage() {
   );
 }
 
+/** Recompute summary counts after an optimistic stage move */
+function recalcSummary(
+  apps: Application[],
+  movedId: string,
+  newStage: Stage
+): Record<string, number> {
+  return apps.reduce<Record<string, number>>((acc, a) => {
+    const stage = a._id === movedId ? newStage : a.stage;
+    acc[stage] = (acc[stage] ?? 0) + 1;
+    return acc;
+  }, {});
+}
+
 /* ── Kanban Board ───────────────────────────────────────────── */
 function KanbanBoard({
   applications,
-  summary,
   onStageChange,
 }: {
   applications: Application[];
   summary: Record<string, number>;
   onStageChange: (id: string, stage: Stage) => void;
 }) {
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeApp = activeId ? applications.find(a => a._id === activeId) ?? null : null;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
+  const byStage = STAGES.reduce<Record<Stage, Application[]>>((acc, s) => {
+    acc[s] = applications.filter(a => a.stage === s);
+    return acc;
+  }, {} as Record<Stage, Application[]>);
+
+  function handleDragStart({ active }: DragStartEvent) {
+    setActiveId(String(active.id));
+  }
+
+  function handleDragEnd({ active, over }: DragEndEvent) {
+    setActiveId(null);
+    if (!over) return;
+    const targetStage = String(over.id) as Stage;
+    const app = applications.find(a => a._id === String(active.id));
+    if (app && app.stage !== targetStage && STAGES.includes(targetStage)) {
+      onStageChange(String(active.id), targetStage);
+    }
+  }
+
   if (applications.length === 0) {
     return (
       <EmptyState
@@ -150,41 +224,75 @@ function KanbanBoard({
     );
   }
 
-  const byStage = STAGES.reduce<Record<Stage, Application[]>>((acc, s) => {
-    acc[s] = applications.filter(a => a.stage === s);
-    return acc;
-  }, {} as Record<Stage, Application[]>);
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: '60vh' }}>
+        {STAGES.map(stage => (
+          <KanbanColumn
+            key={stage}
+            stage={stage}
+            cards={byStage[stage]}
+            onStageChange={onStageChange}
+          />
+        ))}
+      </div>
+
+      {/* Ghost card that follows the cursor */}
+      <DragOverlay dropAnimation={{ duration: 180, easing: 'ease' }}>
+        {activeApp && <KanbanCardGhost app={activeApp} />}
+      </DragOverlay>
+    </DndContext>
+  );
+}
+
+function KanbanColumn({
+  stage,
+  cards,
+  onStageChange,
+}: {
+  stage: Stage;
+  cards: Application[];
+  onStageChange: (id: string, stage: Stage) => void;
+}) {
+  const meta = STAGE_META[stage];
+  const { setNodeRef, isOver } = useDroppable({ id: stage });
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: '60vh' }}>
-      {STAGES.map(stage => {
-        const meta = STAGE_META[stage];
-        const cards = byStage[stage];
-        return (
-          <div key={stage} className="flex flex-col gap-2 min-w-[220px] w-[220px] shrink-0">
-            {/* Column header */}
-            <div className={cn('flex items-center justify-between px-3 py-2 rounded-md border', meta.bg, 'border-current/20')}>
-              <span className={cn('text-xs font-semibold', meta.color)}>{meta.label}</span>
-              <span className={cn('text-xs font-bold px-1.5 py-0.5 rounded-full bg-background/40', meta.color)}>
-                {cards.length}
-              </span>
-            </div>
+    <div className="flex flex-col gap-2 min-w-[220px] w-[220px] shrink-0">
+      {/* Column header */}
+      <div className={cn('flex items-center justify-between px-3 py-2 rounded-md border', meta.bg, 'border-current/20')}>
+        <span className={cn('text-xs font-semibold', meta.color)}>{meta.label}</span>
+        <span className={cn('text-xs font-bold px-1.5 py-0.5 rounded-full bg-background/40', meta.color)}>
+          {cards.length}
+        </span>
+      </div>
 
-            {/* Cards */}
-            <div className="flex flex-col gap-2 flex-1">
-              {cards.length === 0 ? (
-                <div className="flex-1 border border-dashed border-border rounded-lg flex items-center justify-center py-8">
-                  <span className="text-xs text-muted-foreground">Empty</span>
-                </div>
-              ) : (
-                cards.map(app => (
-                  <KanbanCard key={app._id} app={app} onStageChange={onStageChange} />
-                ))
-              )}
-            </div>
+      {/* Drop zone */}
+      <div
+        ref={setNodeRef}
+        className={cn(
+          'flex flex-col gap-2 flex-1 rounded-lg p-1 min-h-[80px] transition-colors',
+          isOver && 'bg-primary/5 ring-1 ring-primary/30'
+        )}
+      >
+        {cards.length === 0 ? (
+          <div className={cn(
+            'flex-1 border border-dashed rounded-lg flex items-center justify-center py-10 transition-colors',
+            isOver ? 'border-primary/50 bg-primary/5' : 'border-border'
+          )}>
+            <span className="text-xs text-muted-foreground">Drop here</span>
           </div>
-        );
-      })}
+        ) : (
+          cards.map(app => (
+            <KanbanCard key={app._id} app={app} onStageChange={onStageChange} />
+          ))
+        )}
+      </div>
     </div>
   );
 }
@@ -197,17 +305,36 @@ function KanbanCard({
   onStageChange: (id: string, stage: Stage) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: app._id });
+
   const snap = app.jobSnapshot;
   const title = snap?.title ?? app.job?.title ?? 'Untitled';
   const company = snap?.companyName ?? app.job?.companyName ?? '—';
   const salaryMin = snap?.salaryMin ?? app.job?.salaryMin;
   const salaryMax = snap?.salaryMax ?? app.job?.salaryMax;
 
+  const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
+
   return (
-    <div className="card gradient-border p-3 flex flex-col gap-2 hover:glow transition-all duration-200 relative">
-      {/* Avatar + title */}
-      <div className="flex items-start gap-2">
-        <div className="w-7 h-7 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs shrink-0">
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className={cn(
+        'card gradient-border p-3 flex flex-col gap-2 transition-all duration-150 relative',
+        isDragging ? 'opacity-30 ring-1 ring-primary/40 shadow-none' : 'hover:glow'
+      )}
+    >
+      {/* Drag handle + avatar + title */}
+      <div className="flex items-start gap-1.5">
+        <button
+          {...listeners}
+          className="mt-0.5 shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground transition-colors touch-none"
+          tabIndex={-1}
+        >
+          <GripVertical className="w-3.5 h-3.5" />
+        </button>
+        <div className="w-6 h-6 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-[10px] shrink-0">
           {company[0]}
         </div>
         <div className="min-w-0 flex-1">
@@ -223,7 +350,7 @@ function KanbanCard({
 
       {/* Salary */}
       {(salaryMin || salaryMax) && (
-        <p className="text-[10px] font-medium text-foreground/80">
+        <p className="text-[10px] font-medium text-foreground/80 pl-5">
           {formatSalary(salaryMin, salaryMax)}
         </p>
       )}
@@ -239,7 +366,7 @@ function KanbanCard({
             Move <ChevronDown className="w-2.5 h-2.5" />
           </button>
           {menuOpen && (
-            <div className="absolute bottom-full right-0 mb-1 z-30 card border border-border shadow-xl min-w-[130px] py-1">
+            <div className="absolute bottom-full right-0 mb-1 z-50 card border border-border shadow-xl min-w-[130px] py-1">
               {STAGES.filter(s => s !== app.stage).map(s => (
                 <button
                   key={s}
@@ -253,6 +380,33 @@ function KanbanCard({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Visual ghost that follows the cursor while dragging */
+function KanbanCardGhost({ app }: { app: Application }) {
+  const snap = app.jobSnapshot;
+  const title = snap?.title ?? app.job?.title ?? 'Untitled';
+  const company = snap?.companyName ?? app.job?.companyName ?? '—';
+  const salaryMin = snap?.salaryMin ?? app.job?.salaryMin;
+  const salaryMax = snap?.salaryMax ?? app.job?.salaryMax;
+
+  return (
+    <div className="card gradient-border p-3 flex flex-col gap-2 w-[220px] shadow-2xl ring-1 ring-primary/40 rotate-1 scale-[1.03] opacity-95">
+      <div className="flex items-start gap-1.5">
+        <GripVertical className="w-3.5 h-3.5 mt-0.5 text-muted-foreground/30 shrink-0" />
+        <div className="w-6 h-6 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-[10px] shrink-0">
+          {company[0]}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-foreground line-clamp-2 leading-snug">{title}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{company}</p>
+        </div>
+      </div>
+      {(salaryMin || salaryMax) && (
+        <p className="text-[10px] font-medium text-foreground/80 pl-5">{formatSalary(salaryMin, salaryMax)}</p>
+      )}
     </div>
   );
 }

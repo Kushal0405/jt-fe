@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { X, Plus, Trash2, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { jobsApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,11 @@ export default function AddJobModal({ onClose, onCreated }: Props) {
   const [skillInput, setSkillInput] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // JD parse state
+  const [jdOpen, setJdOpen] = useState(false);
+  const [jdText, setJdText] = useState('');
+  const [parsing, setParsing] = useState(false);
+
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
@@ -24,6 +29,33 @@ export default function AddJobModal({ onClose, onCreated }: Props) {
     const s = skillInput.trim();
     if (s && !skills.includes(s)) setSkills(prev => [...prev, s]);
     setSkillInput('');
+  }
+
+  async function parseJD() {
+    if (!jdText.trim()) return toast.error('Paste a job description first');
+    setParsing(true);
+    try {
+      const { data } = await jobsApi.parseJd(jdText);
+      const p = data.parsed;
+      setForm(f => ({
+        ...f,
+        title: p.title || f.title,
+        companyName: p.companyName || f.companyName,
+        location: p.location || f.location,
+        locationType: p.locationType || f.locationType,
+        salaryMin: p.salaryMin != null ? String(p.salaryMin) : f.salaryMin,
+        salaryMax: p.salaryMax != null ? String(p.salaryMax) : f.salaryMax,
+        experienceMin: p.experienceMin != null ? String(p.experienceMin) : f.experienceMin,
+        experienceMax: p.experienceMax != null ? String(p.experienceMax) : f.experienceMax,
+        description: p.description || f.description,
+      }));
+      if (p.skills?.length) setSkills(p.skills);
+      toast.success('Fields auto-filled from JD!');
+      setJdOpen(false);
+      setJdText('');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Parsing failed');
+    } finally { setParsing(false); }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -53,6 +85,44 @@ export default function AddJobModal({ onClose, onCreated }: Props) {
         <div className="flex items-center justify-between p-5 border-b border-border">
           <h2 className="font-semibold text-foreground">Add Job</h2>
           <button onClick={onClose} className="btn-ghost p-1.5"><X className="w-4 h-4" /></button>
+        </div>
+
+        {/* ── JD Auto-fill panel ── */}
+        <div className="border-b border-border">
+          <button
+            type="button"
+            onClick={() => setJdOpen(v => !v)}
+            className="w-full flex items-center justify-between px-5 py-3 text-xs font-medium text-primary hover:bg-primary/5 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5" />
+              Auto-fill from Job Description (AI)
+            </span>
+            {jdOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+
+          {jdOpen && (
+            <div className="px-5 pb-4 space-y-2">
+              <p className="text-[11px] text-muted-foreground">Paste the full job description below. AI will extract title, company, skills, salary, and more.</p>
+              <textarea
+                value={jdText}
+                onChange={e => setJdText(e.target.value)}
+                rows={6}
+                placeholder="Paste the job description here…"
+                className="input resize-none text-xs"
+              />
+              <button
+                type="button"
+                onClick={parseJD}
+                disabled={parsing || !jdText.trim()}
+                className={cn('btn-primary w-full justify-center text-xs py-2', (parsing || !jdText.trim()) && 'opacity-60')}
+              >
+                {parsing
+                  ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Parsing…</>
+                  : <><Sparkles className="w-3.5 h-3.5" /> Auto-fill Fields</>}
+              </button>
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">

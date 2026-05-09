@@ -1,9 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Search, Plus, MapPin, Briefcase, Clock, ExternalLink, BookmarkPlus, Check } from 'lucide-react';
+import { Search, Plus, MapPin, Briefcase, Clock, ExternalLink, BookmarkPlus, Check, RefreshCw } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AppLayout from '@/app/components/layout/AppLayout';
 import { PageHeader, EmptyState, Spinner, SkillTag, ScoreBadge } from '@/app/components/ui';
-import { jobsApi, applicationsApi } from '@/lib/api';
+import { jobsApi, applicationsApi, resumeApi } from '@/lib/api';
+import { useATSScore } from '@/app/hooks/useATSScore';
 import { Job } from '@/types';
 import { formatSalary, timeAgo, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -12,46 +14,66 @@ import AddJobModal from '@/app/components/jobs/AddJobModal';
 const LOCATION_TYPES = ['all', 'remote', 'hybrid', 'onsite'];
 
 export default function JobsPage() {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [locType, setLocType] = useState('all');
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
   const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set());
+  const qc = useQueryClient();
 
-  async function load() {
-    setLoading(true);
-    try {
+  // Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [debouncedSearch, locType]);
+
+  const jobsQueryKey = ['jobs', { page, locType, search: debouncedSearch }] as const;
+
+  const { data, isLoading, isFetching, refetch } = useQuery({
+    queryKey: jobsQueryKey,
+    queryFn: async () => {
       const params: Record<string, string | number> = { page, limit: 12 };
-      if (search) params.q = search;
+      if (debouncedSearch) params.q = debouncedSearch;
       if (locType !== 'all') params.locationType = locType;
       const { data } = await jobsApi.list(params);
-      setJobs(data.jobs);
-      setTotal(data.total);
-    } catch { toast.error('Failed to load jobs'); }
-    finally { setLoading(false); }
-  }
+      return { jobs: data.jobs as Job[], total: data.total as number };
+    },
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
+  });
 
-  async function loadApplied() {
-    try {
-      const { data } = await applicationsApi.list({ limit: 1000 });
+  const jobs = data?.jobs ?? [];
+  const total = data?.total ?? 0;
+
+  // Fetch the user's default resume text once for ATS scoring
+  const { data: cvData } = useQuery({
+    queryKey: ['my-cv-text'],
+    queryFn: () => resumeApi.myText().then(r => r.data.text as string),
+    staleTime: Infinity,
+    gcTime: 30 * 60_000,
+  });
+  const userCV = cvData ?? '';
+
+  // Load which jobs the current user has already saved
+  useEffect(() => {
+    applicationsApi.list({ limit: 1000 }).then(({ data }) => {
       setAppliedJobIds(new Set(
         data.applications
           .map((a: any) => (typeof a.job === 'string' ? a.job : a.job?._id))
           .filter(Boolean)
       ));
-    } catch { /* silent — not critical */ }
-  }
+    }).catch(() => {/* silent */});
+  }, []);
 
-  useEffect(() => { load(); }, [page, locType]);
-  useEffect(() => {
-    const t = setTimeout(load, 400);
-    return () => clearTimeout(t);
-  }, [search]);
-  useEffect(() => { loadApplied(); }, []);
+  async function handleRefetch() {
+    await qc.invalidateQueries({ queryKey: ['jobs'] });
+    toast.success('Jobs refreshed');
+  }
 
   async function saveJob(job: Job) {
     setSaving(job._id);
@@ -70,9 +92,19 @@ export default function JobsPage() {
         title="Job Board"
         subtitle={`${total} openings matching your profile`}
         action={
-          <button onClick={() => setShowAdd(true)} className="btn-primary">
-            <Plus className="w-4 h-4" /> Add Job
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefetch}
+              disabled={isFetching}
+              className="btn-secondary px-3 py-2"
+              title="Refresh jobs"
+            >
+              <RefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />
+            </button>
+            <button onClick={() => setShowAdd(true)} className="btn-primary">
+              <Plus className="w-4 h-4" /> Add Job
+            </button>
+          </div>
         }
       />
 
@@ -104,7 +136,7 @@ export default function JobsPage() {
       </div>
 
       {/* Grid */}
-      {loading ? (
+      {isLoading ? (
         <div className="flex justify-center py-20"><Spinner /></div>
       ) : jobs.length === 0 ? (
         <EmptyState
@@ -116,7 +148,7 @@ export default function JobsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {jobs.map(job => (
-            <JobCard key={job._id} job={job} onSave={() => saveJob(job)} saving={saving === job._id} isApplied={appliedJobIds.has(job._id)} />
+            <JobCard key={job._id} job={job} onSave={() => saveJob(job)} saving={saving === job._id} isApplied={appliedJobIds.has(job._id)} userCV={userCV} />
           ))}
         </div>
       )}
@@ -138,14 +170,51 @@ export default function JobsPage() {
         </div>
       )}
 
-      {showAdd && <AddJobModal onClose={() => setShowAdd(false)} onCreated={load} />}
+      {showAdd && <AddJobModal onClose={() => setShowAdd(false)} onCreated={() => qc.invalidateQueries({ queryKey: ['jobs'] })} />}
     </AppLayout>
   );
 }
 
-function JobCard({ job, onSave, saving, isApplied }: { job: Job; onSave: () => void; saving: boolean; isApplied: boolean }) {
+function ATSScoreRing({ score, loading }: { score: number | null; loading: boolean }) {
+  const r = 18;
+  const circ = 2 * Math.PI * r;
+  const pct = score ?? 0;
+  const offset = circ - (pct / 100) * circ;
+  const color = pct >= 71 ? '#10b981' : pct >= 41 ? '#f59e0b' : '#ef4444';
+
+  if (loading) {
+    return <div className="w-12 h-12 rounded-full bg-secondary animate-pulse shrink-0" />;
+  }
+  if (score === null) return null;
+
   return (
-    <div className={cn('card gradient-border p-5 hover:glow transition-all duration-300 flex flex-col gap-4', isApplied && 'ring-1 ring-emerald-500/30')}>
+    <div className="relative w-12 h-12 shrink-0" title={`ATS Match: ${score}%`}>
+      <svg className="w-full h-full -rotate-90" viewBox="0 0 44 44">
+        <circle cx="22" cy="22" r={r} fill="none" stroke="currentColor"
+          strokeWidth="3.5" className="text-secondary" />
+        <circle cx="22" cy="22" r={r} fill="none" stroke={color}
+          strokeWidth="3.5" strokeDasharray={circ} strokeDashoffset={offset}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 0.7s cubic-bezier(0.4,0,0.2,1)' }} />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-[10px] font-bold leading-none" style={{ color }}>{score}%</span>
+      </div>
+    </div>
+  );
+}
+
+function JobCard({ job, onSave, saving, isApplied, userCV }: {
+  job: Job; onSave: () => void; saving: boolean; isApplied: boolean; userCV: string;
+}) {
+  const { ref, score, missingKeywords, isLoading: atsLoading } =
+    useATSScore(job.description ?? (job.skills?.join(' ') ?? ''), userCV);
+
+  return (
+    <div
+      ref={ref}
+      className={cn('card gradient-border p-5 hover:glow transition-all duration-300 flex flex-col gap-4', isApplied && 'ring-1 ring-emerald-500/30')}
+    >
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0">
@@ -158,6 +227,7 @@ function JobCard({ job, onSave, saving, isApplied }: { job: Job; onSave: () => v
             </span>
           )}
           {job.matchScore !== undefined && <ScoreBadge score={job.matchScore} />}
+          <ATSScoreRing score={score} loading={atsLoading} />
         </div>
       </div>
 
@@ -194,6 +264,23 @@ function JobCard({ job, onSave, saving, isApplied }: { job: Job; onSave: () => v
           {job.skills.length > 4 && (
             <span className="text-xs text-muted-foreground self-center">+{job.skills.length - 4}</span>
           )}
+        </div>
+      )}
+
+      {/* ATS missing keywords */}
+      {missingKeywords.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Missing from your CV</p>
+          <div className="flex flex-wrap gap-1">
+            {missingKeywords.slice(0, 3).map(kw => (
+              <span
+                key={kw}
+                className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/10 text-red-400 border border-red-500/20"
+              >
+                {kw}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
