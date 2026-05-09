@@ -1,13 +1,14 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Briefcase, FileText, Building2, Upload, LogOut, Zap } from 'lucide-react';
+import { LayoutDashboard, Briefcase, FileText, Building2, Upload, LogOut, Zap, Compass } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 
 const nav = [
   { href: '/dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
   { href: '/jobs',         label: 'Job Board',    icon: Briefcase },
+  { href: '/discover',     label: 'Discover',     icon: Compass },
   { href: '/applications', label: 'Applications', icon: FileText },
   { href: '/companies',    label: 'Companies',    icon: Building2 },
   { href: '/resume',       label: 'Resume',       icon: Upload },

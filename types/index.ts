@@ -99,6 +99,18 @@ export interface MatchResult {
   summary: string;
 }
 
+export interface DiscoveredJob {
+  _id: string;
+  externalId: string;
+  title: string;
+  company: string;
+  location: string;
+  description: string;
+  applyLink: string;
+  source: string;
+  fetchedAt: string;
+}
+
 export interface PipelineSummary {
   saved: number;
   applied: number;

@@ -23,9 +23,10 @@ export default function LoginPage() {
     try {
       const { data } = await authApi.login(email, password);
       setAuth(data.user, data.token);
-      toast.success(`Welcome back, ${data.user.name}!`);
+      toast.success(`Welcome back, ${data.user?.name || 'User'}!`);
       router.push('/dashboard');
     } catch (err: any) {
+      debugger;
       toast.error(err.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);

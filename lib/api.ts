@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://jd-be-nee7.onrender.com/api',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://jd-be.vercel.app/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -83,4 +83,15 @@ export const resumeApi = {
 export const atsApi = {
   score: (jobDescription: string, cvText: string) =>
     api.post('/ats-score', { jobDescription, cvText }),
+};
+
+export const discoveredJobsApi = {
+  list: (params?: { role?: string; location?: string; page?: number; limit?: number }) =>
+    api.get<{ jobs: import('@/types').DiscoveredJob[]; total: number; page: number; pages: number }>(
+      '/jobs/discovered', { params }
+    ),
+  addToTracker: (jobId: string) =>
+    api.post(`/jobs/discovered/${jobId}/apply`),
+  triggerFetch: (cronSecret: string) =>
+    api.post('/jobs/fetch-daily', {}, { headers: { Authorization: `Bearer ${cronSecret}` } }),
 };
