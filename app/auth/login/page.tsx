@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { GoogleLogin } from '@react-oauth/google';
 import { Zap, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -16,6 +17,21 @@ export default function LoginPage() {
   const { setAuth } = useAuthStore();
   const router = useRouter();
 
+  async function handleGoogleSuccess(credentialResponse: { credential?: string }) {
+    if (!credentialResponse.credential) return toast.error('Google sign-in failed');
+    setLoading(true);
+    try {
+      const { data } = await authApi.googleAuth(credentialResponse.credential);
+      setAuth(data.user, data.token);
+      toast.success(`Welcome, ${data.user?.name || 'User'}!`);
+      router.push('/dashboard');
+    } catch {
+      toast.error('Google sign-in failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email || !password) return toast.error('Fill in all fields');
@@ -26,7 +42,6 @@ export default function LoginPage() {
       toast.success(`Welcome back, ${data.user?.name || 'User'}!`);
       router.push('/dashboard');
     } catch (err: any) {
-      debugger;
       toast.error(err.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);
@@ -99,6 +114,26 @@ export default function LoginPage() {
               ) : 'Sign in'}
             </button>
           </form>
+
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs text-muted-foreground">
+              <span className="bg-card px-2">or</span>
+            </div>
+          </div>
+
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => toast.error('Google sign-in failed')}
+              theme="filled_black"
+              shape="pill"
+              text="signin_with"
+              width="100%"
+            />
+          </div>
         </div>
 
         <p className="text-center text-sm text-muted-foreground mt-5">

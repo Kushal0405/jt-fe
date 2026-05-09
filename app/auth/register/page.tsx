@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { GoogleLogin } from '@react-oauth/google';
 import { Zap, User, Mail, Lock } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -13,6 +14,21 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const { setAuth } = useAuthStore();
   const router = useRouter();
+
+  async function handleGoogleSuccess(credentialResponse: { credential?: string }) {
+    if (!credentialResponse.credential) return toast.error('Google sign-up failed');
+    setLoading(true);
+    try {
+      const { data } = await authApi.googleAuth(credentialResponse.credential);
+      setAuth(data.user, data.token);
+      toast.success(`Welcome, ${data.user?.name || 'User'}!`);
+      router.push('/dashboard');
+    } catch {
+      toast.error('Google sign-up failed');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
@@ -82,6 +98,26 @@ export default function RegisterPage() {
                 : 'Create account'}
             </button>
           </form>
+
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs text-muted-foreground">
+              <span className="bg-card px-2">or</span>
+            </div>
+          </div>
+
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => toast.error('Google sign-up failed')}
+              theme="filled_black"
+              shape="pill"
+              text="signup_with"
+              width="100%"
+            />
+          </div>
         </div>
 
         <p className="text-center text-sm text-muted-foreground mt-5">
