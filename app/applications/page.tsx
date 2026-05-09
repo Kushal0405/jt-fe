@@ -262,7 +262,7 @@ function AppRow({ app, onStageChange }: { app: Application; onStageChange: (id: 
   const snap = app.jobSnapshot;
 
   return (
-    <div className="card gradient-border overflow-hidden">
+    <div className="card gradient-border">
       <div className="flex items-center gap-4 p-4">
         {/* Company avatar */}
         <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0">
@@ -293,7 +293,7 @@ function AppRow({ app, onStageChange }: { app: Application; onStageChange: (id: 
             <ChevronDown className="w-3 h-3" />
           </button>
           {open && (
-            <div className="absolute right-0 top-full mt-1 z-20 card border border-border shadow-xl min-w-[140px] py-1">
+            <div className="absolute right-0 top-full mt-1 z-50 card border border-border shadow-xl min-w-[140px] py-1">
               {STAGES.map(s => (
                 <button
                   key={s}
