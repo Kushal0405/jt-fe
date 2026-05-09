@@ -58,7 +58,7 @@ export default function JobsPage() {
     try {
       await applicationsApi.create({ job: job._id, stage: 'saved' });
       toast.success('Job saved to pipeline!');
-      setAppliedJobIds(prev => new Set([...prev, job._id]));
+      setAppliedJobIds(prev => { const next = new Set(prev); next.add(job._id); return next; });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Already saved');
     } finally { setSaving(null); }
