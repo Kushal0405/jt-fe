@@ -49,7 +49,7 @@ export default function DiscoverPage() {
   const { data: cvData } = useQuery({
     queryKey: ['my-cv-text'],
     queryFn: () => resumeApi.myText().then(r => r.data.text as string),
-    staleTime: Infinity,
+    staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
   });
   const userCV = cvData ?? '';
