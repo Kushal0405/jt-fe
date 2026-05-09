@@ -3,7 +3,39 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Light mode (default) ──────────────────────────────────── */
 :root {
+  --background: 220 20% 97%;
+  --foreground: 224 20% 10%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 224 20% 10%;
+
+  --border: 220 13% 88%;
+  --input: 220 13% 93%;
+
+  --primary: 258 90% 60%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 220 13% 93%;
+  --secondary-foreground: 224 20% 30%;
+
+  --muted: 220 13% 95%;
+  --muted-foreground: 220 10% 46%;
+
+  --accent: 258 90% 60%;
+  --accent-foreground: 0 0% 100%;
+
+  --success: 152 69% 38%;
+  --warning: 38 92% 50%;
+  --danger: 0 84% 55%;
+
+  --radius: 10px;
+  --font-clash: 'Clash Display', sans-serif;
+}
+
+/* ── Dark mode ─────────────────────────────────────────────── */
+.dark {
   --background: 224 20% 6%;
   --foreground: 210 20% 96%;
 
@@ -28,10 +60,6 @@
   --success: 152 69% 45%;
   --warning: 38 92% 55%;
   --danger: 0 84% 60%;
-
-  --radius: 10px;
-
-  --font-clash: 'Clash Display', sans-serif;
 }
 
 * {
@@ -97,6 +125,9 @@ body {
 
   .glow {
     box-shadow: 0 0 40px hsl(258 90% 66% / 0.12);
+  }
+  .dark .glow {
+    box-shadow: 0 0 40px hsl(258 90% 66% / 0.18);
   }
 
   .gradient-border {

@@ -86,8 +86,8 @@ export const atsApi = {
 };
 
 export const discoveredJobsApi = {
-  list: (params?: { role?: string; location?: string; page?: number; limit?: number }) =>
-    api.get<{ jobs: import('@/types').DiscoveredJob[]; total: number; page: number; pages: number }>(
+  list: (params?: { role?: string; location?: string; page?: number; limit?: number; q?: string }) =>
+    api.get<{ jobs: import('@/types').DiscoveredJob[]; total: number; page: number; pages: number; live?: boolean }>(
       '/jobs/discovered', { params }
     ),
   addToTracker: (jobId: string) =>

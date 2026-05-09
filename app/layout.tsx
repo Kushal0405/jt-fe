@@ -3,6 +3,7 @@ import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import { Toaster } from 'react-hot-toast';
 import QueryProvider from '@/app/components/QueryProvider';
+import ThemeProvider from '@/app/components/ThemeProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -12,23 +13,19 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} dark`}>
       <body>
-        <QueryProvider>
-          {children}
-        </QueryProvider>
-        <Toaster
-          position="bottom-right"
-          toastOptions={{
-            style: {
-              background: 'hsl(224 18% 9%)',
-              color: 'hsl(210 20% 96%)',
-              border: '1px solid hsl(224 15% 14%)',
-              borderRadius: '10px',
-              fontSize: '14px',
-            },
-          }}
-        />
+        <ThemeProvider>
+          <QueryProvider>
+            {children}
+          </QueryProvider>
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              className: '!bg-card !text-foreground !border !border-border !rounded-[10px] !text-sm',
+            }}
+          />
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -28,12 +28,21 @@ export default function DiscoverPage() {
   useEffect(() => { const t = setTimeout(() => setDebouncedLocation(location), 400); return () => clearTimeout(t); }, [location]);
   useEffect(() => { setPage(1); }, [debouncedRole, debouncedLocation]);
 
+  // When the user types a role, pass it as ?q= for a live JSearch query.
+  // Without a role filter, fall back to the DB-backed list.
+  const isLiveSearch = !!debouncedRole.trim();
+
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['discovered-jobs', { page, role: debouncedRole, location: debouncedLocation }],
     queryFn: () =>
-      discoveredJobsApi.list({ role: debouncedRole || undefined, location: debouncedLocation || undefined, page, limit: LIMIT })
-        .then(r => r.data),
-    staleTime: 5 * 60_000,
+      discoveredJobsApi.list({
+        q: isLiveSearch ? debouncedRole : undefined,
+        role: !isLiveSearch ? debouncedRole || undefined : undefined,
+        location: debouncedLocation || undefined,
+        page,
+        limit: LIMIT,
+      }).then(r => r.data),
+    staleTime: isLiveSearch ? 60_000 : 5 * 60_000,
     placeholderData: (prev) => prev,
   });
 
@@ -49,12 +58,13 @@ export default function DiscoverPage() {
   const jobs = data?.jobs ?? [];
   const total = data?.total ?? 0;
   const pages = data?.pages ?? 1;
+  const isLive = data?.live ?? false;
 
   return (
     <AppLayout>
       <PageHeader
         title="Discover Jobs"
-        subtitle={`${total} listings fetched from JSearch`}
+        subtitle={isLive ? `${total} live results from JSearch` : `${total} saved listings`}
         action={
           <button
             onClick={() => qc.invalidateQueries({ queryKey: ['discovered-jobs'] })}

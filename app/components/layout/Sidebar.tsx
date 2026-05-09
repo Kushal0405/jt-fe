@@ -1,9 +1,10 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Briefcase, FileText, Building2, Upload, LogOut, Zap, Compass } from 'lucide-react';
+import { LayoutDashboard, Briefcase, FileText, Building2, Upload, LogOut, Zap, Compass, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
+import { useTheme } from '@/app/components/ThemeProvider';
 
 const nav = [
   { href: '/dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
@@ -17,6 +18,7 @@ const nav = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
+  const { theme, toggle } = useTheme();
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-60 bg-card border-r border-border flex flex-col z-40">
@@ -70,6 +72,15 @@ export default function Sidebar() {
         >
           <LogOut className="w-4 h-4" />
           Sign out
+        </button>
+        <button
+          onClick={toggle}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-all duration-150"
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark'
+            ? <><Sun className="w-4 h-4" /> Light mode</>
+            : <><Moon className="w-4 h-4" /> Dark mode</>}
         </button>
       </div>
     </aside>
