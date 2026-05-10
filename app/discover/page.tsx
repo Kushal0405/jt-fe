@@ -90,22 +90,22 @@ export default function DiscoverPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <div className="relative">
+        <div className="relative flex-1 min-w-[160px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             value={role}
             onChange={e => setRole(e.target.value)}
             placeholder="Role or title..."
-            className="input pl-9 w-48"
+            className="input pl-9 w-full"
           />
         </div>
-        <div className="relative">
+        <div className="relative flex-1 min-w-[140px]">
           <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             value={location}
             onChange={e => setLocation(e.target.value)}
             placeholder="Location..."
-            className="input pl-9 w-44"
+            className="input pl-9 w-full"
           />
         </div>
         <div className="flex items-center gap-2 bg-secondary border border-border rounded-md px-3 py-2">

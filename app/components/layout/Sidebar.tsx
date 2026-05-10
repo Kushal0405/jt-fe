@@ -15,13 +15,23 @@ const nav = [
   { href: '/resume',       label: 'Resume',       icon: Upload },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  open?: boolean;
+  onClose?: () => void;
+}
+
+export default function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const { theme, toggle } = useTheme();
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-60 bg-card border-r border-border flex flex-col z-40">
+    <aside className={cn(
+      'fixed left-0 top-0 h-screen w-60 bg-card border-r border-border flex flex-col z-40',
+      'transition-transform duration-300 ease-in-out',
+      'md:translate-x-0',
+      open ? 'translate-x-0' : '-translate-x-full'
+    )}>
       {/* Logo */}
       <div className="px-5 py-5 border-b border-border">
         <div className="flex items-center gap-2.5">
@@ -40,6 +50,7 @@ export default function Sidebar() {
             <Link
               key={href}
               href={href}
+              onClick={onClose}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-150',
                 active
